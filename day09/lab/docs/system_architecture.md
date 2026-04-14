@@ -1,6 +1,6 @@
 # System Architecture — Lab Day 09
 
-**Nhóm:** DoHaiNam  
+**Nhóm:** Nhóm 10 - Đỗ Hải Nam  
 **Ngày:** 2026-04-14  
 **Version:** 1.0
 
@@ -56,9 +56,11 @@ graph TD
 
 | Thuộc tính | Mô tả |
 |-----------|-------|
-| **Nhiệm vụ** | Tìm kiếm thông tin liên quan từ Knowledge Base (ChromaDB) và thực hiện Reranking để tăng độ chính xác. |
-| **Embedding model** | Jina API (`jina-embeddings-v2-base-en`) |
-| **Top-k** | Lấy 10 chunks ban đầu và Rerank chọn ra Top 3 (`jina-reranker-v2-base-multilingual`). |
+| **Nhiệm vụ** | Tìm kiếm Hybrid kết hợp ngữ nghĩa và từ khóa từ Knowledge Base (ChromaDB), và thực hiện Reranking cuối cùng. |
+| **Data Ingestion** | Semantic Chunking sử dụng **Jina Segmenter API** (mô hình `cl100k_base`). |
+| **Embedding model** | Jina API (`jina-embeddings-v5-text-small`) |
+| **Hybrid Search** | ChromaDB (Vector Dense) + `rank-bm25` (Sparse Keyword). |
+| **Top-k & Rerank** | Tìm top 20 mỗi bộ máy (tổng max 40), sau đó dùng `jina-reranker-v3` lọc top 5. |
 | **Stateless?** | Yes |
 
 ### Policy Tool Worker (`workers/policy_tool.py`)

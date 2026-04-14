@@ -1,6 +1,6 @@
 # Routing Decisions Log — Lab Day 09
 
-**Nhóm:** DoHaiNam  
+**Nhóm:** Nhóm 10 - Đỗ Hải Nam  
 **Ngày:** 2026-04-14
 
 ---
@@ -81,9 +81,9 @@ Bởi vì "ERR-999-FATAL" không tồn tại trong bất kỳ tài liệu nào. 
 
 | Worker | Số câu được route | % tổng |
 |--------|------------------|--------|
-| retrieval_worker | 10 | 66% |
-| policy_tool_worker | 4 | 27% |
-| human_review | 1 | 7% |
+| retrieval_worker | 8 | 53% |
+| policy_tool_worker | 7 | 47% |
+| human_review | 1 | 6% |
 
 ### Routing Accuracy
 

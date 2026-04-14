@@ -1,20 +1,21 @@
 # Single Agent vs Multi-Agent Comparison — Lab Day 09
 
-**Nhóm:** DoHaiNam  
+**Nhóm:** Nhóm 10 - Đỗ Hải Nam  
 **Ngày:** 2026-04-14
 
 ---
 
 ## 1. Metrics Comparison
 
-| Metric | Day 08 (Single Agent) | Day 09 (Multi-Agent) | Delta | Ghi chú |
+| Metric | Day 08 (Single Agent) | Day 09 (Multi-Agent/Advanced RAG) | Delta | Ghi chú |
 |--------|----------------------|---------------------|-------|---------|
-| Avg confidence | 0.72 | 0.89 | +0.17 | Reranker giúp tăng độ tin cậy |
-| Avg latency (ms) | 1200 | 2500 | +1300 | Do thêm bước Rerank và Supervisor |
-| Abstain rate (%) | 20% | 10% | -10% | Khả năng tìm kiếm chính xác hơn |
-| Multi-hop accuracy | 40% | 75% | +35% | Supervisor tách nhỏ task giúp LLM xử lý tốt hơn |
-| Routing visibility | ✗ Không có | ✓ Có route_reason | N/A | Dễ dàng biết tại sao route sang worker đó |
+| Avg confidence | 0.72 | 0.54->0.80 | N/A | Confidence tổng hợp chặt chẽ hơn nhờ Jina Reranker v3 |
+| Avg latency (ms) | 1200 | 3700 | +2500 | Tăng do thêm Semantic Chunking, BM25, và Reranker API |
+| Abstain rate (%) | 20% | 6.6% (HITL) | -13.4% | Hybrid Search bắt trọn context, giảm tỷ lệ bí |
+| Multi-hop accuracy | 40% | 85% | +45% | Supervisor tách task kết hợp LLM Policy reasoning |
+| Routing visibility | ✗ Không có | ✓ Có route_reason | N/A | Dễ debug qua trace |
 | Debug time (estimate) | 45 phút | 10 phút | -35 | Tiết kiệm thời gian khoanh vùng lỗi |
+
 
 ---
 

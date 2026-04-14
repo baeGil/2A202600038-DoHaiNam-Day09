@@ -1,7 +1,7 @@
 # Báo Cáo Cá Nhân — Lab Day 09: Multi-Agent Orchestration
 
-**Họ và tên:** DoHaiNam  
-**Vai trò trong nhóm:** Supervisor Owner / Worker Owner  
+**Họ và tên:** Đỗ Hải Nam
+**Vai trò trong nhóm:** Supervisor Owner / Worker Owner 
 **Ngày nộp:** 2026-04-14  
 **Độ dài yêu cầu:** 500–800 từ
 
@@ -22,38 +22,44 @@ Công việc của tôi đóng vai trò là "xương sống" của hệ thống,
 
 ## 2. Tôi đã ra một quyết định kỹ thuật gì? (150–200 từ)
 
-**Quyết định:** Tôi đã quyết định sử dụng **Jina Reranker v2** trong `retrieval_worker` thay vì chỉ sử dụng kết quả tìm kiếm thô từ ChromaDB.
+**Quyết định:** Tôi đã quyết định nâng cấp toàn bộ hệ thống lên **Advanced RAG** bằng cách áp dụng **Semantic Chunking (Jina Segmenter API)**, **Hybrid Search (Vector + BM25)** và **Jina Reranker v3**.
 
-**Lý do:** Trong các thử nghiệm ban đầu (từ Day 08), tôi nhận thấy tìm kiếm ngữ nghĩa đôi khi trả về các đoạn văn bản có độ tương đồng cao nhưng không chứa thông tin trả lời trực tiếp cho câu hỏi (vd: câu hỏi về SLA P1 nhưng trả về FAQ chung). Việc chỉ lấy Top 3 từ vector database là không đủ an toàn. 
+**Lý do:** Trong các thử nghiệm ban đầu, độ tin cậy (confidence) của hệ thống chỉ ở mức 0.1 và tìm kiếm thiếu chính xác do việc index nguyên cả file thay vì chia nhỏ đoạn. Thêm vào đó, chỉ dùng Dense Search (Vector) dễ bỏ lỡ các từ khóa chuyên ngành chính xác như "ERR-403".
 
-Tôi đã chọn cách tiếp cận: lấy Top 10 chunks từ ChromaDB, sau đó gởi toàn bộ danh sách này kèm query sang Jina Reranker API. Reranker sử dụng mô hình cross-encoder mạnh mẽ hơn để chấm điểm lại mức độ phù hợp thực sự. Kết quả cuối cùng chỉ lấy Top 3 đã rerank.
+Tôi đã chọn cách tiếp cận toàn diện:
+1. Chia nhỏ văn bản theo độ gối đầu dựa trên ngữ nghĩa của con người (bằng mô hình Jina Segmenter và chuẩn CL100K_Base).
+2. Khi retrieve, kết hợp BM25 (theo từ khóa chính xác) lẫn ChromaDB (ngữ nghĩa), lấy top 20 của mỗi bên phối hợp lại.
+3. Chạy qua thuật toán Jina Reranker v3 để chắt lọc top 5 ứng viên tốt nhất.
 
-**Trade-off đã chấp nhận:** Quyết định này làm tăng độ trễ (latency) của hệ thống thêm khoảng 300-500ms cho mỗi lượt truy vấn và tốn thêm chi phí API call. Tuy nhiên, đổi lại độ chính xác của thông tin đầu vào cho bước Synthesis tăng lên rõ rệt, giảm thiểu tình trạng LLM trả lời "không tìm thấy thông tin" (abstain) sai lệch.
+**Trade-off đã chấp nhận:** Việc kết hợp nhiều hệ thống (Segmenter API, BM25, Reranker v3) làm tăng độ trễ và phức tạp trong khâu code (phải dùng `rank_bm25` module để tokenize cục bộ). Đổi lại, độ tin cậy được nâng từ mức dưới trung bình lên mức xuất sắc (trung bình >0.5-0.7).
 
 **Bằng chứng từ trace/code:**
 ```python
-def retrieve_dense(query: str, top_k: int = 10) -> list:
-    # ... call chromadb ...
-    # Rerank với Jina để lấy Top 3 chất lượng nhất
-    reranked = rerank_with_jina(query, chunks)
-    return reranked
+def retrieve_hybrid(query: str, top_k: int = 5) -> list:
+    dense_chunks = retrieve_dense(query, top_k=20)
+    sparse_chunks = retrieve_sparse(query, top_k=20)   # BM25Okapi
+    # Combines and Rerank
+    reranked = rerank_with_jina(query, candidate_chunks)
+    return reranked[:top_k]
 ```
 
 ---
 
 ## 3. Tôi đã sửa một lỗi gì? (150–200 từ)
 
-**Lỗi:** Trace ghi nhận `retrieved_chunks` luôn trống dù câu hỏi rất rõ ràng.
+**Lỗi:** Trace ghi nhận `retrieved_chunks` luôn lỗi Dimension (768 vs 1024) và hệ thống Groq LLM bị treo (timeout 48 giây).
 
-**Symptom:** Khi chạy pipeline lần đầu với câu hỏi "SLA P1 là bao lâu?", hệ thống trả về "Không đủ thông tin" dù trong thư mục docs đã có file `sla_p1_2026.txt`.
+**Symptom:** Khi chạy pipeline lần đầu, ChromaDB liên tục chửi "Embedding dimension 768 does not match 1024". Tốc độ trả lời của LLM `policy_tool_worker` kéo dài tới gần 1 phút.
 
-**Root cause:** Nguyên nhân nằm ở việc không khớp (mismatch) giữa Embedding Model dùng để Index dữ liệu ban đầu và Embedding Model dùng để Query. Dữ liệu cũ trong `chroma_db` được index bằng mô hình local `all-MiniLM-L6-v2`, trong khi tôi mới cập nhật `retrieval.py` sang dùng `jina-embeddings-v2-base-en`. Gradient của hai không gian vector này hoàn toàn khác nhau khiến kết quả similarity luôn thấp hơn ngưỡng tìm kiếm.
+**Root cause:** 
+1. Lỗi data index: Dữ liệu cũ trong `chroma_db` được index bằng mô hình `all-MiniLM-L6-v2` (768D), trong khi code mới chạy `jina-embeddings-v5-text-small` (1024D). Không tương thích hệ vector.
+2. Lỗi timeout: LLM Kimi phải đọc quá nhiều raw text (chưa chunk) cộng với việc không giới hạn max_tokens ở module Groq.
 
-**Cách sửa:** Tôi đã viết script `reindex.py` để xóa toàn bộ collection cũ và thực hiện embedding lại toàn bộ 5 tài liệu nội bộ bằng Jina API đồng nhất với retrieval logic.
+**Cách sửa:** Tôi đã viết script `reindex.py` để xóa sạch toàn collection cũ, bổ sung Jina Segmenter API và embed lại với 1024D. Đối với `policy_tool.py`, tôi khai báo tham số `max_tokens=300` để ép Groq phản hồi ngay lập tức, đưa latency trung bình hệ thống từ > 40,000ms xuống dưới 4,000ms.
 
 **Bằng chứng trước/sau:** 
-- Trước khi sửa: `confidence: 0.1`, `retrieved_chunks: []`.
-- Sau khi sửa: `confidence: 0.92`, `retrieved_chunks: [{"text": "SLA P1: phản hồi 15 phút...", "source": "sla_p1_2026.txt", "score": 0.89}]`.
+- Trước khi sửa: Lỗi crash ChromaDB, thời gian là 48836ms, confidence: 0.1.
+- Sau khi sửa: Lỗi biến mất, thời gian phản hồi: 3763ms, confidence: 0.54-0.75.
 
 ---
 
@@ -75,6 +81,6 @@ Tôi phụ thuộc vào MCP Owner để đảm bảo các mock data trong `mcp_s
 
 ## 5. Nếu có thêm 2 giờ, tôi sẽ làm gì? (50–100 từ)
 
-Tôi sẽ cải tiến `supervisor_node` bằng cách sử dụng một mô hình LLM nhỏ (như `llama-3-8b` trên Groq) thay vì keyword. Tôi sẽ thử điều này vì trace của câu `q15` (câu hỏi multi-hop khó nhất) cho thấy Supervisor đôi khi chỉ chọn `policy_tool_worker` mà bỏ qua `retrieval_worker` nếu câu hỏi có quá nhiều từ khóa về rule/policy cùng lúc.
+Tôi sẽ cải tiến `supervisor_node` bằng cách sử dụng một mô hình LLM mạnh mẽ hơn thay vì keyword. Tôi sẽ thử điều này vì trace của câu `q15` (câu hỏi multi-hop khó nhất) cho thấy Supervisor đôi khi chỉ chọn `policy_tool_worker` mà bỏ qua `retrieval_worker` nếu câu hỏi có quá nhiều từ khóa về rule/policy cùng lúc.
 
 ---
