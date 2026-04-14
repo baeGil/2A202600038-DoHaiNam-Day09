@@ -1,0 +1,100 @@
+{
+  "task": "Nhân viên vừa vào thử việc (trong probation period) muốn làm remote vì lý do cá nhân. Điều kiện là gì?",
+  "route_reason": "default route",
+  "risk_high": false,
+  "needs_tool": false,
+  "hitl_triggered": false,
+  "retrieved_chunks": [
+    {
+      "id": "hr_leave_policy.txt_chunk_34",
+      "text": "- Nhân viên sau probation period có thể làm remote tối đa 2 ngày/tuần.\n",
+      "source": "hr_leave_policy.txt",
+      "score": 0.42870003,
+      "metadata": {
+        "chunk_id": "hr_leave_policy.txt_chunk_34",
+        "source": "hr_leave_policy.txt"
+      }
+    },
+    {
+      "id": "hr_leave_policy.txt_chunk_33",
+      "text": "4.1 Điều kiện remote:\n",
+      "source": "hr_leave_policy.txt",
+      "score": 0.16445562,
+      "metadata": {
+        "chunk_id": "hr_leave_policy.txt_chunk_33",
+        "source": "hr_leave_policy.txt"
+      }
+    },
+    {
+      "id": "hr_leave_policy.txt_chunk_37",
+      "text": "4.2 Yêu cầu kỹ thuật khi remote:\n",
+      "source": "hr_leave_policy.txt",
+      "score": -0.0008962,
+      "metadata": {
+        "chunk_id": "hr_leave_policy.txt_chunk_37",
+        "source": "hr_leave_policy.txt"
+      }
+    }
+  ],
+  "retrieved_sources": [
+    "hr_leave_policy.txt"
+  ],
+  "policy_result": {},
+  "mcp_tools_used": [],
+  "final_answer": "Không đủ thông tin trong tài liệu nội bộ để xác định điều kiện remote cho nhân viên đang trong probation period.",
+  "sources": [
+    "hr_leave_policy.txt"
+  ],
+  "confidence": 0.3,
+  "history": [
+    "[supervisor] received task: Nhân viên vừa vào thử việc (trong probation period) muốn làm remote vì lý do cá ",
+    "[supervisor] route=retrieval_worker reason=default route",
+    "[retrieval_worker] called",
+    "[retrieval_worker] retrieved 3 chunks from ['hr_leave_policy.txt']",
+    "[synthesis_worker] called",
+    "[synthesis_worker] answer generated, confidence=0.3, sources=['hr_leave_policy.txt']",
+    "[graph] completed in 3179ms"
+  ],
+  "workers_called": [
+    "retrieval_worker",
+    "retrieval_worker",
+    "synthesis_worker",
+    "synthesis_worker"
+  ],
+  "supervisor_route": "retrieval_worker",
+  "latency_ms": 3179,
+  "run_id": "run_20260414_171639",
+  "worker_io_logs": [
+    {
+      "worker": "retrieval_worker",
+      "input": {
+        "task": "Nhân viên vừa vào thử việc (trong probation period) muốn làm remote vì lý do cá nhân. Điều kiện là gì?",
+        "top_k": 3
+      },
+      "output": {
+        "chunks_count": 3,
+        "sources": [
+          "hr_leave_policy.txt"
+        ]
+      },
+      "error": null
+    },
+    {
+      "worker": "synthesis_worker",
+      "input": {
+        "task": "Nhân viên vừa vào thử việc (trong probation period) muốn làm remote vì lý do cá nhân. Điều kiện là gì?",
+        "chunks_count": 3,
+        "has_policy": false
+      },
+      "output": {
+        "answer_length": 112,
+        "sources": [
+          "hr_leave_policy.txt"
+        ],
+        "confidence": 0.3
+      },
+      "error": null
+    }
+  ],
+  "question_id": "q14"
+}

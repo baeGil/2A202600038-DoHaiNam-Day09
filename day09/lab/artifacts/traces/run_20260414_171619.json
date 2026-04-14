@@ -1,0 +1,102 @@
+{
+  "task": "ERR-403-AUTH là lỗi gì và cách xử lý?",
+  "route_reason": "unknown error code + risk_high → human review | human approved → retrieval",
+  "risk_high": true,
+  "needs_tool": false,
+  "hitl_triggered": true,
+  "retrieved_chunks": [
+    {
+      "id": "it_helpdesk_faq.txt_chunk_16",
+      "text": "A: Kiểm tra kết nối Internet trước. Nếu vẫn lỗi, tạo ticket P3 với log file VPN đính kèm.\n\n",
+      "source": "it_helpdesk_faq.txt",
+      "score": 0.12455927,
+      "metadata": {
+        "chunk_id": "it_helpdesk_faq.txt_chunk_16",
+        "source": "it_helpdesk_faq.txt"
+      }
+    },
+    {
+      "id": "it_helpdesk_faq.txt_chunk_9",
+      "text": "A: Tài khoản bị khóa sau 5 lần đăng nhập sai liên tiếp. Để mở khóa, liên hệ IT Helpdesk hoặc tự reset qua portal SSO.\n\n",
+      "source": "it_helpdesk_faq.txt",
+      "score": 0.08858377,
+      "metadata": {
+        "chunk_id": "it_helpdesk_faq.txt_chunk_9",
+        "source": "it_helpdesk_faq.txt"
+      }
+    },
+    {
+      "id": "it_helpdesk_faq.txt_chunk_7",
+      "text": "A: Truy cập https://sso.company.internal/reset hoặc liên hệ Helpdesk qua ext. 9000. Mật khẩu mới sẽ được gửi qua email công ty trong vòng 5 phút.\n\n",
+      "source": "it_helpdesk_faq.txt",
+      "score": 0.02395606,
+      "metadata": {
+        "chunk_id": "it_helpdesk_faq.txt_chunk_7",
+        "source": "it_helpdesk_faq.txt"
+      }
+    }
+  ],
+  "retrieved_sources": [
+    "it_helpdesk_faq.txt"
+  ],
+  "policy_result": {},
+  "mcp_tools_used": [],
+  "final_answer": "Không đủ thông tin trong tài liệu nội bộ để xác định lỗi ERR-403-AUTH và cách xử lý cụ thể.",
+  "sources": [
+    "it_helpdesk_faq.txt"
+  ],
+  "confidence": 0.3,
+  "history": [
+    "[supervisor] received task: ERR-403-AUTH là lỗi gì và cách xử lý?",
+    "[supervisor] route=human_review reason=unknown error code + risk_high → human review",
+    "[human_review] HITL triggered — awaiting human input",
+    "[retrieval_worker] called",
+    "[retrieval_worker] retrieved 3 chunks from ['it_helpdesk_faq.txt']",
+    "[synthesis_worker] called",
+    "[synthesis_worker] answer generated, confidence=0.3, sources=['it_helpdesk_faq.txt']",
+    "[graph] completed in 2298ms"
+  ],
+  "workers_called": [
+    "human_review",
+    "retrieval_worker",
+    "retrieval_worker",
+    "synthesis_worker",
+    "synthesis_worker"
+  ],
+  "supervisor_route": "retrieval_worker",
+  "latency_ms": 2298,
+  "run_id": "run_20260414_171619",
+  "worker_io_logs": [
+    {
+      "worker": "retrieval_worker",
+      "input": {
+        "task": "ERR-403-AUTH là lỗi gì và cách xử lý?",
+        "top_k": 3
+      },
+      "output": {
+        "chunks_count": 3,
+        "sources": [
+          "it_helpdesk_faq.txt"
+        ]
+      },
+      "error": null
+    },
+    {
+      "worker": "synthesis_worker",
+      "input": {
+        "task": "ERR-403-AUTH là lỗi gì và cách xử lý?",
+        "chunks_count": 3,
+        "has_policy": false
+      },
+      "output": {
+        "answer_length": 91,
+        "sources": [
+          "it_helpdesk_faq.txt"
+        ],
+        "confidence": 0.3
+      },
+      "error": null
+    }
+  ],
+  "question_id": "q09"
+}

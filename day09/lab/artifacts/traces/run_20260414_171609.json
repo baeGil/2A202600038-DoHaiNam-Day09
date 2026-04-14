@@ -1,0 +1,100 @@
+{
+  "task": "Ticket P1 không được phản hồi sau 10 phút. Hệ thống tự động làm gì?",
+  "route_reason": "default route",
+  "risk_high": false,
+  "needs_tool": false,
+  "hitl_triggered": false,
+  "retrieved_chunks": [
+    {
+      "id": "sla_p1_2026.txt_chunk_20",
+      "text": "- Escalation: Tự động escalate lên Senior Engineer nếu không có phản hồi trong 10 phút.\n",
+      "source": "sla_p1_2026.txt",
+      "score": 0.37072882,
+      "metadata": {
+        "chunk_id": "sla_p1_2026.txt_chunk_20",
+        "source": "sla_p1_2026.txt"
+      }
+    },
+    {
+      "id": "sla_p1_2026.txt_chunk_46",
+      "text": "PagerDuty: Tự động nhắn on-call khi P1 ticket mới\n",
+      "source": "sla_p1_2026.txt",
+      "score": 0.29507196,
+      "metadata": {
+        "chunk_id": "sla_p1_2026.txt_chunk_46",
+        "source": "sla_p1_2026.txt"
+      }
+    },
+    {
+      "id": "sla_p1_2026.txt_chunk_17",
+      "text": "Ticket P1:\n",
+      "source": "sla_p1_2026.txt",
+      "score": 0.23397204,
+      "metadata": {
+        "chunk_id": "sla_p1_2026.txt_chunk_17",
+        "source": "sla_p1_2026.txt"
+      }
+    }
+  ],
+  "retrieved_sources": [
+    "sla_p1_2026.txt"
+  ],
+  "policy_result": {},
+  "mcp_tools_used": [],
+  "final_answer": "Sau 10 phút không phản hồi, hệ thống sẽ tự động escalate ticket P1 lên Senior Engineer [sla_p1_2026.txt].",
+  "sources": [
+    "sla_p1_2026.txt"
+  ],
+  "confidence": 0.75,
+  "history": [
+    "[supervisor] received task: Ticket P1 không được phản hồi sau 10 phút. Hệ thống tự động làm gì?",
+    "[supervisor] route=retrieval_worker reason=default route",
+    "[retrieval_worker] called",
+    "[retrieval_worker] retrieved 3 chunks from ['sla_p1_2026.txt']",
+    "[synthesis_worker] called",
+    "[synthesis_worker] answer generated, confidence=0.75, sources=['sla_p1_2026.txt']",
+    "[graph] completed in 2412ms"
+  ],
+  "workers_called": [
+    "retrieval_worker",
+    "retrieval_worker",
+    "synthesis_worker",
+    "synthesis_worker"
+  ],
+  "supervisor_route": "retrieval_worker",
+  "latency_ms": 2412,
+  "run_id": "run_20260414_171609",
+  "worker_io_logs": [
+    {
+      "worker": "retrieval_worker",
+      "input": {
+        "task": "Ticket P1 không được phản hồi sau 10 phút. Hệ thống tự động làm gì?",
+        "top_k": 3
+      },
+      "output": {
+        "chunks_count": 3,
+        "sources": [
+          "sla_p1_2026.txt"
+        ]
+      },
+      "error": null
+    },
+    {
+      "worker": "synthesis_worker",
+      "input": {
+        "task": "Ticket P1 không được phản hồi sau 10 phút. Hệ thống tự động làm gì?",
+        "chunks_count": 3,
+        "has_policy": false
+      },
+      "output": {
+        "answer_length": 105,
+        "sources": [
+          "sla_p1_2026.txt"
+        ],
+        "confidence": 0.75
+      },
+      "error": null
+    }
+  ],
+  "question_id": "q06"
+}

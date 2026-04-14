@@ -17,6 +17,10 @@ Gọi độc lập để test:
 
 import os
 import sys
+import requests
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # ─────────────────────────────────────────────
 # Worker Contract (xem contracts/worker_contracts.yaml)
@@ -30,70 +34,93 @@ DEFAULT_TOP_K = 3
 
 def _get_embedding_fn():
     """
-    Trả về embedding function.
-    TODO Sprint 1: Implement dùng OpenAI hoặc Sentence Transformers.
+    Trả về embedding function sử dụng Jina API.
     """
-    # Option A: Sentence Transformers (offline, không cần API key)
-    try:
-        from sentence_transformers import SentenceTransformer
-        model = SentenceTransformer("all-MiniLM-L6-v2")
-        def embed(text: str) -> list:
-            return model.encode([text])[0].tolist()
-        return embed
-    except ImportError:
-        pass
-
-    # Option B: OpenAI (cần API key)
-    try:
-        from openai import OpenAI
-        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        def embed(text: str) -> list:
-            resp = client.embeddings.create(input=text, model="text-embedding-3-small")
-            return resp.data[0].embedding
-        return embed
-    except ImportError:
-        pass
-
-    # Fallback: random embeddings cho test (KHÔNG dùng production)
-    import random
+    import requests
     def embed(text: str) -> list:
-        return [random.random() for _ in range(384)]
-    print("⚠️  WARNING: Using random embeddings (test only). Install sentence-transformers.")
+        jina_key = os.getenv("JINA_API_KEY")
+        if not jina_key:
+            # Fallback to random for debugging if no key (matched to 1024)
+            import random
+            return [random.random() for _ in range(1024)]
+            
+        url = "https://api.jina.ai/v1/embeddings"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {jina_key}"
+        }
+        data = {
+            "model": os.getenv("JINA_EMBEDDING_MODEL", "jina-embeddings-v3"),
+            "input": [text],
+            "dimensions": 1024
+        }
+        response = requests.post(url, headers=headers, json=data)
+        response.raise_for_status()
+        return response.json()["data"][0]["embedding"]
+    
     return embed
+
+
+def rerank_with_jina(query: str, chunks: list) -> list:
+    """
+    Rerank chunks sử dụng Jina Reranker API.
+    """
+    jina_key = os.getenv("JINA_API_KEY")
+    if not jina_key or not chunks:
+        return chunks
+        
+    url = "https://api.jina.ai/v1/rerank"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {jina_key}"
+    }
+    
+    documents = [c["text"] for c in chunks]
+    data = {
+        "model": os.getenv("JINA_RERANKER_MODEL", "jina-reranker-v2-base-multilingual"),
+        "query": query,
+        "top_n": min(len(chunks), DEFAULT_TOP_K),
+        "documents": documents
+    }
+    
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        response.raise_for_status()
+        results = response.json()["results"]
+        
+        reranked_chunks = []
+        for res in results:
+            idx = res["index"]
+            chunk = chunks[idx].copy()
+            chunk["score"] = res["relevance_score"]
+            reranked_chunks.append(chunk)
+        return reranked_chunks
+    except Exception as e:
+        print(f"⚠️  Jina Rerank failed: {e}")
+        return chunks[:DEFAULT_TOP_K]
 
 
 def _get_collection():
     """
     Kết nối ChromaDB collection.
-    TODO Sprint 2: Đảm bảo collection đã được build từ Step 3 trong README.
     """
     import chromadb
-    client = chromadb.PersistentClient(path="./chroma_db")
+    client = chromadb.PersistentClient(path=os.getenv("CHROMA_DB_PATH", "./chroma_db"))
+    collection_name = os.getenv("CHROMA_COLLECTION", "day09_docs")
     try:
-        collection = client.get_collection("day09_docs")
+        collection = client.get_collection(collection_name)
     except Exception:
-        # Auto-create nếu chưa có
         collection = client.get_or_create_collection(
-            "day09_docs",
+            collection_name,
             metadata={"hnsw:space": "cosine"}
         )
-        print(f"⚠️  Collection 'day09_docs' chưa có data. Chạy index script trong README trước.")
     return collection
 
 
-def retrieve_dense(query: str, top_k: int = DEFAULT_TOP_K) -> list:
+def retrieve_dense(query: str, top_k: int = 20) -> list:
     """
-    Dense retrieval: embed query → query ChromaDB → trả về top_k chunks.
-
-    TODO Sprint 2: Implement phần này.
-    - Dùng _get_embedding_fn() để embed query
-    - Query collection với n_results=top_k
-    - Format result thành list of dict
-
-    Returns:
-        list of {"text": str, "source": str, "score": float, "metadata": dict}
+    Dense retrieval: embed query -> query ChromaDB.
     """
-    # TODO: Implement dense retrieval
     embed = _get_embedding_fn()
     query_embedding = embed(query)
 
@@ -102,38 +129,91 @@ def retrieve_dense(query: str, top_k: int = DEFAULT_TOP_K) -> list:
         results = collection.query(
             query_embeddings=[query_embedding],
             n_results=top_k,
-            include=["documents", "distances", "metadatas"]
+            include=["documents", "metadatas", "distances"]
         )
 
+        if not results["documents"] or not results["documents"][0]:
+            return []
+
         chunks = []
-        for i, (doc, dist, meta) in enumerate(zip(
-            results["documents"][0],
-            results["distances"][0],
-            results["metadatas"][0]
-        )):
+        for i in range(len(results["documents"][0])):
             chunks.append({
-                "text": doc,
-                "source": meta.get("source", "unknown"),
-                "score": round(1 - dist, 4),  # cosine similarity
-                "metadata": meta,
+                "id": results["ids"][0][i] if "ids" in results and results["ids"] else str(i),
+                "text": results["documents"][0][i],
+                "source": results["metadatas"][0][i].get("source", "unknown"),
+                "score": 1 - results["distances"][0][i],
+                "metadata": results["metadatas"][0][i],
             })
+            
         return chunks
 
     except Exception as e:
         print(f"⚠️  ChromaDB query failed: {e}")
-        # Fallback: return empty (abstain)
         return []
 
+def retrieve_sparse(query: str, top_k: int = 20) -> list:
+    """
+    Sparse retrieval: thuật toán BM25.
+    """
+    try:
+        from rank_bm25 import BM25Okapi
+        collection = _get_collection()
+        all_data = collection.get()
+        if not all_data or not all_data.get("documents"):
+            return []
+        
+        docs = all_data["documents"]
+        tokenized_corpus = [doc.lower().split() for doc in docs]
+        bm25 = BM25Okapi(tokenized_corpus)
+        tokenized_query = query.lower().split()
+        scores = bm25.get_scores(tokenized_query)
+        
+        top_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:top_k]
+        
+        chunks = []
+        for i in top_indices:
+            if scores[i] <= 0:
+                continue
+            chunks.append({
+                "id": all_data["ids"][i],
+                "text": docs[i],
+                "source": all_data["metadatas"][i].get("source", "unknown"),
+                "score": scores[i], 
+                "metadata": all_data["metadatas"][i],
+            })
+        return chunks
+    except Exception as e:
+        print(f"⚠️  BM25 query failed: {e}")
+        return []
+
+def retrieve_hybrid(query: str, top_k: int = 5) -> list:
+    """
+    Kết hợp Dense + Sparse và Rerank.
+    """
+    # 1. Lấy top 20 Dense
+    dense_chunks = retrieve_dense(query, top_k=20)
+    
+    # 2. Lấy top 20 Sparse (BM25)
+    sparse_chunks = retrieve_sparse(query, top_k=20)
+    
+    # 3. Kết hợp & Loại bỏ trùng lặp
+    combined = {}
+    for c in dense_chunks + sparse_chunks:
+        cid = c.get("id", c["text"])
+        if cid not in combined:
+            combined[cid] = c
+            
+    candidate_chunks = list(combined.values())
+    if not candidate_chunks:
+        return []
+        
+    # 4. Rerank bằng Jina AI
+    reranked = rerank_with_jina(query, candidate_chunks)
+    return reranked[:top_k]
 
 def run(state: dict) -> dict:
     """
     Worker entry point — gọi từ graph.py.
-
-    Args:
-        state: AgentState dict
-
-    Returns:
-        Updated AgentState với retrieved_chunks và retrieved_sources
     """
     task = state.get("task", "")
     top_k = state.get("retrieval_top_k", DEFAULT_TOP_K)
@@ -143,7 +223,6 @@ def run(state: dict) -> dict:
 
     state["workers_called"].append(WORKER_NAME)
 
-    # Log worker IO (theo contract)
     worker_io = {
         "worker": WORKER_NAME,
         "input": {"task": task, "top_k": top_k},
@@ -152,7 +231,7 @@ def run(state: dict) -> dict:
     }
 
     try:
-        chunks = retrieve_dense(task, top_k=top_k)
+        chunks = retrieve_hybrid(task, top_k=top_k)
 
         sources = list({c["source"] for c in chunks})
 
@@ -171,12 +250,12 @@ def run(state: dict) -> dict:
         worker_io["error"] = {"code": "RETRIEVAL_FAILED", "reason": str(e)}
         state["retrieved_chunks"] = []
         state["retrieved_sources"] = []
-        state["history"].append(f"[{WORKER_NAME}] ERROR: {e}")
+        state["history"].append(f"[{WORKER_NAME}] ERROR: {str(e)}")
 
-    # Ghi worker IO vào state để trace
     state.setdefault("worker_io_logs", []).append(worker_io)
 
     return state
+
 
 
 # ─────────────────────────────────────────────

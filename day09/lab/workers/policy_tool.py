@@ -64,82 +64,71 @@ def _call_mcp_tool(tool_name: str, tool_input: dict) -> dict:
 
 def analyze_policy(task: str, chunks: list) -> dict:
     """
-    Phân tích policy dựa trên context chunks.
-
-    TODO Sprint 2: Implement logic này với LLM call hoặc rule-based check.
-
-    Cần xử lý các exceptions:
-    - Flash Sale → không được hoàn tiền
-    - Digital product / license key / subscription → không được hoàn tiền
-    - Sản phẩm đã kích hoạt → không được hoàn tiền
-    - Đơn hàng trước 01/02/2026 → áp dụng policy v3 (không có trong docs)
-
-    Returns:
-        dict with: policy_applies, policy_name, exceptions_found, source, rule, explanation
+    Phân tích policy dựa trên context chunks sử dụng Groq LLM.
     """
-    task_lower = task.lower()
-    context_text = " ".join([c.get("text", "") for c in chunks]).lower()
+    import os
+    from groq import Groq
+    
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        return {
+            "policy_applies": False,
+            "policy_name": "unknown",
+            "exceptions_found": [],
+            "source": [],
+            "error": "Groq API key not found."
+        }
+        
+    client = Groq(api_key=api_key)
+    context_text = "\n\n".join([f"Source: {c.get('source')}\nContent: {c.get('text')}" for c in chunks])
+    
+    prompt = f"""Bạn là chuyên gia phân tích chính sách nội bộ.
+Nhiệm vụ: Dựa vào các đoạn văn bản chính sách dưới đây, hãy xác định xem yêu cầu của người dùng có được chấp nhận không và có vướng vào ngoại lệ nào không.
 
-    # --- Rule-based exception detection ---
-    exceptions_found = []
+Yêu cầu của người dùng: {task}
 
-    # Exception 1: Flash Sale
-    if "flash sale" in task_lower or "flash sale" in context_text:
-        exceptions_found.append({
-            "type": "flash_sale_exception",
-            "rule": "Đơn hàng Flash Sale không được hoàn tiền (Điều 3, chính sách v4).",
-            "source": "policy_refund_v4.txt",
-        })
+Tài liệu chính sách:
+{context_text}
 
-    # Exception 2: Digital product
-    if any(kw in task_lower for kw in ["license key", "license", "subscription", "kỹ thuật số"]):
-        exceptions_found.append({
-            "type": "digital_product_exception",
-            "rule": "Sản phẩm kỹ thuật số (license key, subscription) không được hoàn tiền (Điều 3).",
-            "source": "policy_refund_v4.txt",
-        })
+Hãy trả về kết quả dưới dạng JSON với cấu trúc sau:
+{{
+  "policy_applies": boolean,
+  "policy_name": "tên chính sách",
+  "exceptions_found": [
+    {{
+      "type": "loại ngoại lệ",
+      "rule": "quy định cụ thể",
+      "source": "tên file"
+    }}
+  ],
+  "policy_version_note": "ghi chú về phiên bản nếu cần (ví dụ: áp dụng v3 thay vì v4)",
+  "explanation": "giải thích ngắn gọn"
+}}
+Chỉ trả về JSON, không giải thích thêm."""
 
-    # Exception 3: Activated product
-    if any(kw in task_lower for kw in ["đã kích hoạt", "đã đăng ký", "đã sử dụng"]):
-        exceptions_found.append({
-            "type": "activated_exception",
-            "rule": "Sản phẩm đã kích hoạt hoặc đăng ký tài khoản không được hoàn tiền (Điều 3).",
-            "source": "policy_refund_v4.txt",
-        })
+    try:
+        response = client.chat.completions.create(
+            model=os.getenv("GROQ_LLM_MODEL", "moonshotai/kimi-k2-instruct"),
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0,
+            max_tokens=300,
+            response_format={"type": "json_object"}
+        )
+        import json
+        analysis = json.loads(response.choices[0].message.content)
+        analysis["source"] = list({c.get("source", "unknown") for c in chunks})
+        return analysis
+    except Exception as e:
+        print(f"⚠️  Policy analysis failed: {e}")
+        # Fallback to empty result
+        return {
+            "policy_applies": False,
+            "policy_name": "error",
+            "exceptions_found": [],
+            "source": [],
+            "explanation": f"Lỗi phân tích: {str(e)}"
+        }
 
-    # Determine policy_applies
-    policy_applies = len(exceptions_found) == 0
-
-    # Determine which policy version applies (temporal scoping)
-    # TODO: Check nếu đơn hàng trước 01/02/2026 → v3 applies (không có docs, nên flag cho synthesis)
-    policy_name = "refund_policy_v4"
-    policy_version_note = ""
-    if "31/01" in task_lower or "30/01" in task_lower or "trước 01/02" in task_lower:
-        policy_version_note = "Đơn hàng đặt trước 01/02/2026 áp dụng chính sách v3 (không có trong tài liệu hiện tại)."
-
-    # TODO Sprint 2: Gọi LLM để phân tích phức tạp hơn
-    # Ví dụ:
-    # from openai import OpenAI
-    # client = OpenAI()
-    # response = client.chat.completions.create(
-    #     model="gpt-4o-mini",
-    #     messages=[
-    #         {"role": "system", "content": "Bạn là policy analyst. Dựa vào context, xác định policy áp dụng và các exceptions."},
-    #         {"role": "user", "content": f"Task: {task}\n\nContext:\n" + "\n".join([c['text'] for c in chunks])}
-    #     ]
-    # )
-    # analysis = response.choices[0].message.content
-
-    sources = list({c.get("source", "unknown") for c in chunks if c})
-
-    return {
-        "policy_applies": policy_applies,
-        "policy_name": policy_name,
-        "exceptions_found": exceptions_found,
-        "source": sources,
-        "policy_version_note": policy_version_note,
-        "explanation": "Analyzed via rule-based policy check. TODO: upgrade to LLM-based analysis.",
-    }
 
 
 # ─────────────────────────────────────────────

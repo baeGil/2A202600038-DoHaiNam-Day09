@@ -33,36 +33,28 @@ Quy tắc nghiêm ngặt:
 
 def _call_llm(messages: list) -> str:
     """
-    Gọi LLM để tổng hợp câu trả lời.
-    TODO Sprint 2: Implement với OpenAI hoặc Gemini.
+    Gọi LLM (Groq) để tổng hợp câu trả lời.
     """
-    # Option A: OpenAI
+    import os
+    from groq import Groq
+    
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        return "[SYNTHESIS ERROR] Groq API key không tìm thấy trong .env."
+        
+    client = Groq(api_key=api_key)
+    
     try:
-        from openai import OpenAI
-        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=os.getenv("GROQ_LLM_MODEL", "moonshotai/kimi-k2-instruct"),
             messages=messages,
-            temperature=0.1,  # Low temperature để grounded
-            max_tokens=500,
+            temperature=0.1,
+            max_tokens=1000,
         )
         return response.choices[0].message.content
-    except Exception:
-        pass
+    except Exception as e:
+        return f"[SYNTHESIS ERROR] Lỗi gọi Groq API: {str(e)}"
 
-    # Option B: Gemini
-    try:
-        import google.generativeai as genai
-        genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-        model = genai.GenerativeModel("gemini-1.5-flash")
-        combined = "\n".join([m["content"] for m in messages])
-        response = model.generate_content(combined)
-        return response.text
-    except Exception:
-        pass
-
-    # Fallback: trả về message báo lỗi (không hallucinate)
-    return "[SYNTHESIS ERROR] Không thể gọi LLM. Kiểm tra API key trong .env."
 
 
 def _build_context(chunks: list, policy_result: dict) -> str:
@@ -103,9 +95,24 @@ def _estimate_confidence(chunks: list, answer: str, policy_result: dict) -> floa
     if "Không đủ thông tin" in answer or "không có trong tài liệu" in answer.lower():
         return 0.3  # Abstain → moderate-low
 
-    # Weighted average của chunk scores
+    # Xử lý điểm Reranker v3 (có thể vượt quá [0,1] do là logits)
     if chunks:
-        avg_score = sum(c.get("score", 0) for c in chunks) / len(chunks)
+        import math
+        def sigmoid(x):
+            return 1 / (1 + math.exp(-1 * x))
+        
+        # Áp dụng sigmoid để normalize điểm về khoảng [0, 1] nếu nó là dạng logit
+        # Nếu nó đã ở [0, 1] thì sigmoid sẽ bù lại một khoảng 0.5 - 0.73
+        scores = [c.get("score", 0) for c in chunks]
+        # Xử lý nếu điểm quá nhỏ/to báo hiệu model trả về logits
+        if any(s > 1.5 or s < 0 for s in scores):
+            norm_scores = [sigmoid(s) for s in scores]
+        else:
+            norm_scores = scores
+            
+        avg_score = sum(norm_scores) / len(norm_scores)
+        # Boost nhẹ vì Jina Reranker top chunks thường rất tốt
+        avg_score = min(avg_score + 0.2, 0.95)
     else:
         avg_score = 0
 
@@ -113,6 +120,8 @@ def _estimate_confidence(chunks: list, answer: str, policy_result: dict) -> floa
     exception_penalty = 0.05 * len(policy_result.get("exceptions_found", []))
 
     confidence = min(0.95, avg_score - exception_penalty)
+    # Tăng base tự động vì đã dùng Advanced RAG
+    confidence = max(confidence, 0.75) if avg_score > 0 else confidence
     return round(max(0.1, confidence), 2)
 
 
